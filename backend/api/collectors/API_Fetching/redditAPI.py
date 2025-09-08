@@ -1,7 +1,3 @@
-"""
-Reddit API module for ocean disaster post collection
-"""
-
 import time
 import logging
 import praw

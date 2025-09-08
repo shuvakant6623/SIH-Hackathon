@@ -6,9 +6,10 @@ from datetime import datetime
 from dotenv import load_dotenv
 
 # Import our custom API modules
-from routes.youtubeAPI import YoutubeAPI
-from routes.twitterAPI import TwitterAPI
-from routes.redditAPI import RedditAPI
+from API_Fetching.youtubeAPI import YoutubeAPI
+from API_Fetching.twitterAPI import TwitterAPI
+from API_Fetching.redditAPI import RedditAPI
+from API_Fetching.websearchAPI import WebSearchAPI
 
 # Set up logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -24,12 +25,15 @@ class SocialMediaCollector:
         reddit_client_id = os.getenv('REDDIT_CLIENT_ID')
         reddit_client_secret = os.getenv('REDDIT_SECRET_KEY')
         reddit_user_agent = os.getenv('REDDIT_USER_AGENT', 'OceanDisasterMonitor/1.0')
+        google_api_key = os.getenv('GOOGLE_CUSTOM_SEARCH_API')
+        google_cx = os.getenv('GOOGLE_CUSTOM_SEARCH_ID')
         
         logger.info(f"YouTube API key: {'Available' if youtube_api_key else 'Missing'}")
         logger.info(f"Twitter Bearer Token: {'Available' if twitter_bearer_token else 'Missing'}")
         logger.info(f"Reddit Client ID: {'Available' if reddit_client_id else 'Missing'}")
         logger.info(f"Reddit Client Secret: {'Available' if reddit_client_secret else 'Missing'}")
-        
+        logger.info(f"Google Custom Search Key: {'Available' if google_api_key else 'Missing'}")
+        logger.info(f"Google Custom Search ID: {'Available' if google_cx else 'Missing'}")
         # Initialize APIs
         self.youtube_api = YoutubeAPI(youtube_api_key) if youtube_api_key else None
         self.twitter_api = TwitterAPI(twitter_bearer_token) if twitter_bearer_token else None
@@ -40,7 +44,9 @@ class SocialMediaCollector:
         else:
             self.reddit_api = None
             logger.warning("Reddit API credentials incomplete - skipping Reddit")
-        
+        # Initialize Google API only if all credentials are provided
+        if all([google_api_key,google_cx]):
+            self.web_search_api = WebSearchAPI(google_api_key,google_cx)
         # Ocean disaster keywords
         self.keywords = [
             'tsunami', 'storm surge', 'coastal flooding', 'high waves',
@@ -69,7 +75,7 @@ class SocialMediaCollector:
             logger.error(f"Error collecting YouTube data: {e}")
             return []
     
-    '''def collect_twitter_data(self, max_results=10):
+    def collect_twitter_data(self, max_results=10):
         """Collect data from Twitter"""
         if not self.twitter_api:
             logger.warning("Twitter API not configured")
@@ -85,7 +91,7 @@ class SocialMediaCollector:
         except Exception as e:
             logger.error(f"Error collecting Twitter data: {e}")
             return []
-    '''
+    
     def collect_reddit_data(self, max_results=10):
         """Collect data from Reddit"""
         if not self.reddit_api:
@@ -102,6 +108,25 @@ class SocialMediaCollector:
         except Exception as e:
             logger.error(f"Error collecting Reddit data: {e}")
             return []
+        
+    def collect_web_search_data(self,max_results=-10):
+        if not self.web_search_api:
+            logger.warning("Google API not configured")
+            return []
+        try:
+            logger.info("Fetching Web Search Data...")
+            data = self.web_search_api.search_disaster_news(
+                self.keywords,max_results
+            )
+            data = self.web_search_api.search_news_sites(
+                self.keywords,max_results
+            )           
+            logger.info(f"Collected {len(data)} Web searches")
+            return data
+        except Exception as e:
+            logger.error(f"Error collecting Web data : {e}")
+            return[]
+        
     
     def collect_all_data(self, max_results_per_platform=10):
         """Collect data from all available platforms"""
@@ -109,14 +134,15 @@ class SocialMediaCollector:
             'timestamp': datetime.now().isoformat(),
             'twitter_posts': [],
             'reddit_posts': [],
-            'youtube_data': []
+            'youtube_data': [],
+            'web_search_data': []
         }
         
         # Collect from each platform
-        #all_data['twitter_posts'] = self.collect_twitter_data(max_results_per_platform)
+        all_data['twitter_posts'] = self.collect_twitter_data(max_results_per_platform)
         all_data['reddit_posts'] = self.collect_reddit_data(max_results_per_platform)
         all_data['youtube_data'] = self.collect_youtube_data(max_results_per_platform)
-        
+        all_data['web_search_data'] = self.collect_web_search_data(max_results_per_platform)
         return all_data
     
     def collect_specific_platform(self, platform, max_results=10):
@@ -133,11 +159,12 @@ class SocialMediaCollector:
             logger.error(f"Unknown platform: {platform}")
             return []
     
-    def save_raw_data(self, data, filename="routes/FetchedData.json"):
+    def save_raw_data(self, data, filename="routes/FetchedData/*"):
         """Save collected data to JSON file"""
         if not filename:
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            filename = f"routes/raw_social_media_data_{timestamp}.json"
+            output_dir = 'FetchedData'
+            filename = os.path.join(output_dir,f"FetchedData_{timestamp}.json")
         
         try:
             with open(filename, 'w', encoding='utf-8') as f:
@@ -166,7 +193,7 @@ class SocialMediaCollector:
         # Test Twitter
         if self.twitter_api:
             try:
-                test_data = self.twitter_api.fetch_ocean_disaster_tweets(['tsunami'], max_results=10)
+                test_data = self.twitter_api.fetch_ocean_disaster_tweets(['tsunami'], max_results=1)
                 results['twitter'] = len(test_data) >= 0  # Even 0 results is success
             except:
                 results['twitter'] = False
@@ -179,7 +206,15 @@ class SocialMediaCollector:
         else:
             results['reddit'] = False
         
-        return results
+        # Test Google
+        if self.web_search_api:
+            try:
+                web_test_data = self.web_search_api.search_disaster_news(['tsunami'],max_results=1)
+                results['Web Search'] = len(web_test_data) >= 0
+            except:
+                results['Web Search'] = False
+        else:
+            results['Web Search'] = False
 
 def main():
     """Main function to demonstrate usage"""
@@ -191,7 +226,7 @@ def main():
     api_status = collector.test_all_apis()
     for platform, status in api_status.items():
         logger.info(f"{platform.capitalize()} API: {'✓ Working' if status else '✗ Failed'}")
-    
+        
     # Collect data from all platforms
     logger.info("\n" + "="*50)
     logger.info("Starting data collection...")
@@ -205,6 +240,7 @@ def main():
     print(f"Twitter posts: {len(data['twitter_posts'])}")
     print(f"Reddit posts: {len(data['reddit_posts'])}")
     print(f"YouTube videos: {len(data['youtube_data'])}")
+    print(f"Web Search data: {len(data['web_search_data'])}")
     print(f"Data saved to: {filename}")
     
     # Print sample data
@@ -214,6 +250,7 @@ def main():
         print(f"Sample Reddit post: {data['reddit_posts'][0]['title'][:100]}...")
     if data['youtube_data']:
         print(f"Sample YouTube video: {data['youtube_data'][0]['title'][:100]}...")
-
+    if data['web_search_data']:
+        print(f"Sample Web Search data: {data['web_search_data'][0]['title'][:100]}...")
 if __name__ == "__main__":
     main()
