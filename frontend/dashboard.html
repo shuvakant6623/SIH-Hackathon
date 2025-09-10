@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - OceanGuardian</title>
+    <!-- Leaflet CSS must come before our custom styles -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+     integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+     crossorigin=""/>
+    <link rel="stylesheet" href="assets/css/styles.css">
+    <link rel="stylesheet" href="assets/css/dashboard.css">
+</head>
+<body>
+    <header>
+        <div class="container">
+            <div class="logo">
+                <img src="assets/images/logo.png" alt="OceanGuardian Logo">
+                <h1>OceanGuardian Dashboard</h1>
+            </div>
+            <nav>
+                <ul>
+                    <li><a href="index.html">Home</a></li>
+                    <li><a href="dashboard.html" class="active">Dashboard</a></li>
+                    <li><a href="report.html">Report Hazard</a></li>
+                    <li><a href="#filters">Filters</a></li>
+                </ul>
+            </nav>
+             <div class="user-info">
+                <span>Welcome, User</span>
+                <button id="logoutBtn" class="btn btn-outline">Logout</button>
+            </div>
+        </div>
+    </header>
+
+    <main>
+        <div class="container">
+            <div class="dashboard-layout">
+                <!-- Left Sidebar: Filters -->
+                <aside class="sidebar">
+                    <h3>Filters</h3>
+                    <form id="filterForm">
+                        <label for="locationFilter">Location:</label>
+                        <input type="text" id="locationFilter" placeholder="e.g., Chennai, Kerala">
+
+                        <label for="hazardTypeFilter">Hazard Type:</label>
+                        <select id="hazardTypeFilter">
+                            <option value="">All Hazards</option>
+                            <option value="tsunami">Tsunami</option>
+                            <option value="cyclone">Cyclone</option>
+                            <option value="flood">Flood</option>
+                            <option value="storm_surge">Storm Surge</option>
+                             <option value="high_waves">High Waves</option>
+                             <option value="coastal_erosion">Coastal Erosion</option>
+                             <option value="rip_current">Rip Current</option>
+                        </select>
+
+                        <label for="dateFilter">Date Range:</label>
+                         <input type="date" id="startDateFilter"> to
+                         <input type="date" id="endDateFilter">
+
+                        <label for="sourceFilter">Source:</label>
+                        <select id="sourceFilter">
+                            <option value="">All Sources</option>
+                            <option value="crowdsourced">Crowdsourced Reports</option>
+                            <option value="social_media">Social Media</option>
+                            <option value="official">Official Alerts</option>
+                        </select>
+
+                        <button type="submit" class="btn btn-primary">Apply Filters</button>
+                        <button type="button" id="resetFiltersBtn" class="btn btn-secondary">Reset</button>
+                    </form>
+
+                    <div class="stats">
+                        <h4>Quick Stats</h4>
+                        <ul>
+                            <li>Total Reports: <span id="totalReports">0</span></li>
+                            <li>Active Hazards: <span id="activeHazards">0</span></li>
+                            <li>Hotspots: <span id="hotspotCount">0</span></li>
+                        </ul>
+                    </div>
+                </aside>
+
+                <!-- Main Content Area -->
+                <div class="main-content">
+                    <div class="tabs">
+                        <button class="tab-btn active" data-tab="map">Map View</button>
+                        <button class="tab-btn" data-tab="trends">Social Trends</button>
+                        <button class="tab-btn" data-tab="reports">Recent Reports</button>
+                    </div>
+
+                    <div class="tab-content active" id="mapTab">
+                        <div id="map"></div>
+                        <div id="hotspotInfo" class="info-panel">
+                            <h4>Hotspot Details</h4>
+                            <p>Select a hotspot on the map for details.</p>
+                        </div>
+                    </div>
+
+                    <div class="tab-content" id="trendsTab">
+                        <h3>Social Media Trends</h3>
+                        <div id="trendingHazards">
+                             <p>Loading trending hazards...</p>
+                        </div>
+                        <div id="socialMediaActivity">
+                             <p>Loading social media activity...</p>
+                        </div>
+                    </div>
+
+                    <div class="tab-content" id="reportsTab">
+                        <h3>Recent Hazard Reports</h3>
+                        <table id="reportsTable">
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>Type</th>
+                                    <th>Location</th>
+                                    <th>Severity</th>
+                                    <th>Date</th>
+                                    <th>Status</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                 <tr>
+                                    <td colspan="6">Loading reports...</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <footer>
+        <div class="container">
+            <p>&copy; 2024 INCOIS. All rights reserved.</p>
+        </div>
+    </footer>
+
+    <!-- Include Map Library JS (e.g., Leaflet) -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+     integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+     crossorigin=""></script>
+    <script src="js/main.js"></script>
+    <script src="js/dashboard.js"></script>
+</body>
+</html>
