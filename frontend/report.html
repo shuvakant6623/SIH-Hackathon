@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Report Hazard - OceanGuardian</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="assets/css/styles.css">
+    <style>
+        #locationMap {
+            height: 400px;
+            margin-bottom: 20px;
+            border-radius: 8px;
+            border: 1px solid #ccc;
+        }
+        .media-preview {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+            gap: 10px;
+            margin-top: 10px;
+        }
+        .media-preview-item {
+            position: relative;
+            aspect-ratio: 1;
+            border-radius: 8px;
+            overflow: hidden;
+            border: 2px solid #eee;
+        }
+        .media-preview-item img,
+        .media-preview-item video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        .remove-media {
+            position: absolute;
+            top: 5px;
+            right: 5px;
+            background: rgba(255,0,0,0.8);
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            cursor: pointer;
+        }
+        .weather-info {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+        .weather-info .weather-item {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 5px;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="container">
+            <div class="logo">
+                <img src="assets/images/logo.png" alt="OceanGuardian Logo">
+                <h1>Report Ocean Hazard</h1>
+            </div>
+            <nav>
+                <ul>
+                    <li><a href="index.html">Home</a></li>
+                    <li><a href="dashboard.html">Dashboard</a></li>
+                    <li><a href="report.html" class="active">Report Hazard</a></li>
+                </ul>
+            </nav>
+             <div class="user-info">
+                <span>Welcome, User</span>
+                <button id="logoutBtn" class="btn btn-outline">Logout</button>
+            </div>
+        </div>
+    </header>
+
+    <main>
+        <div class="container">
+            <section class="report-form-section">
+                <h2>Submit a New Hazard Report</h2>
+                <form id="hazardReportForm" enctype="multipart/form-data">
+                    <div class="form-group">
+                        <label for="userId">User ID (Auto-filled)</label>
+                        <input type="text" id="userId" name="user_id" value="user123" readonly required>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="locationName">Location Name (Optional)</label>
+                        <input type="text" id="locationName" name="location_name" placeholder="e.g., Marina Beach, Chennai">
+                    </div>
+
+                     <div class="form-group">
+                        <label>Select Location on Map *</label>
+                        <div id="locationMap"></div>
+                        <div class="form-row" style="display: flex; gap: 10px; align-items: flex-start;">
+                            <div class="form-group" style="flex: 1;">
+                                <label for="latitude">Latitude</label>
+                                <input type="number" id="latitude" name="latitude" step="any" placeholder="e.g., 13.0827" required readonly>
+                            </div>
+                            <div class="form-group" style="flex: 1;">
+                                <label for="longitude">Longitude</label>
+                                <input type="number" id="longitude" name="longitude" step="any" placeholder="e.g., 80.2707" required readonly>
+                            </div>
+                            <div class="form-group" style="flex: 0;">
+                                <label>&nbsp;</label>
+                                <button type="button" id="getCurrentLocationBtn" class="btn btn-secondary">
+                                    <i class="fas fa-location-arrow"></i> My Location
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="weather-info">
+                        <h5>Current Weather Conditions</h5>
+                        <div id="weatherData">Loading weather data...</div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="hazardType">Hazard Type *</label>
+                        <select id="hazardType" name="hazard_type" required>
+                            <option value="">Select Hazard Type</option>
+                            <option value="tsunami">Tsunami</option>
+                            <option value="cyclone">Cyclone</option>
+                            <option value="flood">Flood</option>
+                            <option value="storm_surge">Storm Surge</option>
+                             <option value="high_waves">High Waves</option>
+                             <option value="coastal_erosion">Coastal Erosion</option>
+                             <option value="rip_current">Rip Current</option>
+                             <option value="other">Other</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="severity">Severity (1-5) *</label>
+                        <input type="range" id="severity" name="severity" min="1" max="5" value="3" required>
+                        <span id="severityValue">3</span>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="description">Description *</label>
+                        <textarea id="description" name="description" rows="4" placeholder="Describe the hazard observed..." required></textarea>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="weatherConditions">Weather Conditions (JSON - Optional)</label>
+                        <textarea id="weatherConditions" name="weather_conditions" rows="2" placeholder='{"temperature": 28, "wind_speed": 15}'></textarea>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="mediaFiles">Upload Media (Images/Videos - Max 10MB each)</label>
+                        <input type="file" id="mediaFiles" name="media_files" multiple accept="image/*,video/*">
+                        <div id="mediaPreview"></div> <!-- Optional: Preview selected files -->
+                    </div>
+
+                    <button type="submit" class="btn btn-primary">Submit Report</button>
+                    <button type="reset" class="btn btn-secondary">Reset Form</button>
+                </form>
+                <div id="reportStatus"></div>
+            </section>
+        </div>
+    </main>
+
+    <footer>
+        <div class="container">
+            <p>&copy; 2024 INCOIS. All rights reserved.</p>
+        </div>
+    </footer>
+
+    <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/js/all.min.js"></script>
+    <script src="js/main.js"></script>
+    <script src="js/report.js"></script>
+</body>
+</html>
