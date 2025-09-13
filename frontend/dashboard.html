@@ -10,6 +10,12 @@
      crossorigin=""/>
     <link rel="stylesheet" href="assets/css/styles.css">
     <link rel="stylesheet" href="assets/css/dashboard.css">
+    <!-- Bootstrap CSS -->
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+
+<!-- Font Awesome (for icons like fas fa-spinner etc.) -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" integrity="sha512-..." crossorigin="anonymous" referrerpolicy="no-referrer" />
+
 </head>
 <body>
     <header>
@@ -48,7 +54,7 @@
                             <option value="">All Hazards</option>
                             <option value="tsunami">Tsunami</option>
                             <option value="cyclone">Cyclone</option>
-                            <option value="flood">Flood</option>
+                            <option value="coastal_flooding">Costal Flood</option>
                             <option value="storm_surge">Storm Surge</option>
                              <option value="high_waves">High Waves</option>
                              <option value="coastal_erosion">Coastal Erosion</option>
@@ -137,6 +143,7 @@
             <p>&copy; 2024 INCOIS. All rights reserved.</p>
         </div>
     </footer>
+    <div id="reportDetailsModal" class="modal"></div>
 
     <!-- Include Map Library JS (e.g., Leaflet) -->
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
@@ -144,5 +151,6 @@
      crossorigin=""></script>
     <script src="js/main.js"></script>
     <script src="js/dashboard.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>

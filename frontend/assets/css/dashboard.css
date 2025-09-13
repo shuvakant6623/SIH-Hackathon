@@ -408,3 +408,12 @@ tr:hover {
         height: 400px;
     }
 }
+
+/* keep Leaflet legend on top */
+.info.legend, .leaflet-control.info.legend, .leaflet-control .info.legend {
+  z-index: 10000 !important;
+  pointer-events: auto !important;
+}
+
+/* optional styling if you use floating legend */
+.floating-hazard-legend div { min-width: 200px; }
