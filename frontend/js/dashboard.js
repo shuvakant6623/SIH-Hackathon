@@ -1,8 +1,4 @@
-// dashboard.js
-
-/* dashboard.js - patched version
-   Replace your current dashboard.js with this content.
-*/
+// dashboard.js - Enhanced version with Authority Alerts functionality
 
 document.addEventListener('DOMContentLoaded', async function () {
     const API_BASE_URL = 'http://127.0.0.1:8001';
@@ -110,7 +106,11 @@ document.addEventListener('DOMContentLoaded', async function () {
             'verified': 'success',
             'pending': 'warning',
             'under review': 'info',
-            'rejected': 'danger'
+            'rejected': 'danger',
+            'urgent': 'danger',
+            'high_priority': 'warning',
+            'standard': 'primary',
+            'informational': 'info'
         };
         return colors[s] || 'secondary';
     }
@@ -151,7 +151,6 @@ document.addEventListener('DOMContentLoaded', async function () {
     }
 
     function addMapLegend() {
-        // make legend interactive & elevated above tiles
         const legend = L.control({ position: 'bottomright' });
         legend.onAdd = function () {
             const div = L.DomUtil.create('div', 'info legend');
@@ -212,7 +211,6 @@ document.addEventListener('DOMContentLoaded', async function () {
                 .setContent(popupHtml)
                 .openOn(map);
 
-            // Attach handlers after DOM inserted
             setTimeout(() => {
                 const btn = document.getElementById(`qrBtn_${uid}`);
                 const closeBtn = document.getElementById(`qrClose_${uid}`);
@@ -268,33 +266,45 @@ document.addEventListener('DOMContentLoaded', async function () {
 
     /* ---------- fetch & render data ---------- */
     async function fetchHazardData() {
-        try {
-            const data = await apiCall('/api/reports/active?hours=48');
-            // Accept either array or { reports: [...] }
-            const reports = Array.isArray(data) ? data : (data && Array.isArray(data.reports) ? data.reports : []);
-            currentHazards = reports.map(report => ({
-                id: report.id,
-                lat: report.latitude,
-                lng: report.longitude,
-                type: report.hazard_type || report.type || 'other',
-                severityRaw: report.severity ?? report.severity_raw ?? 0,
-                severity: getSeverityLevel(report.severity ?? report.severity_raw ?? 0),
-                title: `${report.location_name || report.location || 'Unknown'} - ${formatHazardType(report.hazard_type || report.type || 'other')}`,
-                description: report.description || '',
-                timestamp: report.timestamp || report.created_at || null,
-                status: report.verification_status || report.status || 'Pending',
-                priority: report.priority_score || report.priority || null,
-                media_urls: report.media_urls || []
-            }));
-            updateMapMarkers();
-            return currentHazards;
-        } catch (err) {
-            console.error('Error fetching hazard data:', err);
-            currentHazards = getSampleHazardData();
-            updateMapMarkers();
-            return currentHazards;
+    try {
+        const data = await apiCall('/api/reports/active?hours=48');
+
+        // Ensure we always get an array
+        let reports = [];
+        if (data && Array.isArray(data.reports)) {
+            reports = data.reports;
+        } else if (Array.isArray(data)) {
+            reports = data;
+        } else {
+            console.warn("Unexpected API response format:", data);
+            reports = [];
         }
+
+        currentHazards = reports.map(report => ({
+            id: report.id,
+            lat: report.latitude,
+            lng: report.longitude,
+            type: report.hazard_type || report.type || 'other',
+            severityRaw: report.severity ?? report.severity_raw ?? 0,
+            severity: getSeverityLevel(report.severity ?? report.severity_raw ?? 0),
+            title: `${report.location_name || report.location || 'Unknown'} - ${formatHazardType(report.hazard_type || report.type || 'other')}`,
+            description: report.description || '',
+            timestamp: report.timestamp || report.created_at || null,
+            status: report.verification_status || report.status || 'Pending',
+            priority: report.priority_score || report.priority || null,
+            media_urls: report.media_urls || []
+        }));
+
+        updateMapMarkers();
+        return currentHazards;
+
+    } catch (err) {
+        console.error('Error fetching hazard data:', err);
+        currentHazards = getSampleHazardData();
+        updateMapMarkers();
+        return currentHazards;
     }
+}
 
     function getSampleHazardData() {
         return [
@@ -361,7 +371,6 @@ document.addEventListener('DOMContentLoaded', async function () {
     async function fetchDashboardStats() {
         try {
             const data = await apiCall('/api/dashboard/stats');
-            // adapt to backend keys: total_reports, active_reports, resolved_reports
             updateStatCards(data || {});
             const lastUpdatedEl = document.getElementById('lastUpdated');
             if (lastUpdatedEl) lastUpdatedEl.textContent = formatTimestamp(new Date().toISOString());
@@ -485,7 +494,6 @@ document.addEventListener('DOMContentLoaded', async function () {
                 { id: "post_" + (Date.now() + 1), text: "Cyclone warning issued for coastal Tamil Nadu.", platform: "facebook", timestamp: new Date().toISOString() }
             ];
 
-            // Many backends expect a wrapper object - try { posts: [...] }
             const data = await apiCall('/api/analyze/social-media', {
                 method: 'POST',
                 body: { posts: samplePosts }
@@ -517,6 +525,108 @@ document.addEventListener('DOMContentLoaded', async function () {
                 </div>` : '<p class="text-muted">No high priority alerts</p>'}
             </div>
         `;
+    }
+
+    /* ---------- Authority Alerts Functions ---------- */
+    async function fetchAuthorityAlerts() {
+        const container = document.getElementById('alertsList');
+        if (!container) return;
+
+        try {
+            container.innerHTML = '<div class="text-center"><i class="fas fa-spinner fa-spin"></i> Loading alerts...</div>';
+            const data = await apiCall('/api/alerts');
+            const alerts = Array.isArray(data) ? data : [];
+            
+            if (alerts.length === 0) {
+                container.innerHTML = '<div class="text-muted text-center">No authority alerts found</div>';
+                return;
+            }
+
+            renderAuthorityAlerts(container, alerts);
+        } catch (err) {
+            console.error('Error fetching authority alerts:', err);
+            container.innerHTML = '<div class="alert alert-danger">Error loading authority alerts</div>';
+        }
+    }
+
+    function renderAuthorityAlerts(container, alerts) {
+        container.innerHTML = alerts.map(alert => `
+            <div class="card mb-3">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <div>
+                        <h5 class="mb-0">Alert ID: ${escapeHtml(alert.id.slice(0, 8))}...</h5>
+                        <small class="text-muted">Report: ${escapeHtml(alert.report_id.slice(0, 8))}...</small>
+                    </div>
+                    <span class="badge bg-${getStatusColor(alert.status)} fs-6">${escapeHtml(formatAuthorityType(alert.authority_type))}</span>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-8">
+                            <p class="card-text">${escapeHtml(alert.message)}</p>
+                        </div>
+                        <div class="col-md-4">
+                            <small class="text-muted">
+                                <strong>Status:</strong> <span class="badge bg-${getStatusColor(alert.status)}">${escapeHtml(alert.status)}</span><br>
+                                <strong>Created:</strong> ${formatTimestamp(alert.timestamp)}<br>
+                                <strong>Authority:</strong> ${escapeHtml(formatAuthorityType(alert.authority_type))}
+                            </small>
+                        </div>
+                    </div>
+                    <div class="mt-2">
+                        <button class="btn btn-sm btn-outline-primary" onclick="viewReportDetails('${escapeHtml(alert.report_id)}')">
+                            View Related Report
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `).join('');
+    }
+
+    function formatAuthorityType(type) {
+        const typeMap = {
+            'coast_guard': 'Coast Guard',
+            'disaster_management': 'Disaster Management',
+            'navy': 'Indian Navy',
+            'police': 'State Police',
+            'fire_dept': 'Fire Department',
+            'medical_emergency': 'Medical Emergency',
+            'port_authority': 'Port Authority'
+        };
+        return typeMap[type] || type.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+    }
+
+    function showCreateAlertModal(reportId = '') {
+        const modal = document.getElementById('authorityAlertModal');
+        const reportIdInput = document.getElementById('alertReportId');
+        
+        if (reportId && reportIdInput) {
+            reportIdInput.value = reportId;
+        }
+        
+        const bsModal = new bootstrap.Modal(modal);
+        bsModal.show();
+    }
+
+    async function submitAuthorityAlert(alertData) {
+        try {
+            const response = await apiCall('/api/alerts', {
+                method: 'POST',
+                body: alertData
+            });
+
+            showNotification('Authority alert sent successfully!', 'success');
+            
+            // Refresh the alerts tab if it's active
+            const activeTab = document.querySelector('.tab-btn.active');
+            if (activeTab && activeTab.getAttribute('data-tab') === 'alerts') {
+                await fetchAuthorityAlerts();
+            }
+            
+            return response;
+        } catch (err) {
+            console.error('Error submitting authority alert:', err);
+            throw err;
+        }
     }
 
     /* ---------- report details & verification ---------- */
@@ -606,6 +716,9 @@ document.addEventListener('DOMContentLoaded', async function () {
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
                     ${isPending ? `<button type="button" id="verifyBtn" class="btn btn-success">Verify</button>
                                    <button type="button" id="rejectBtn" class="btn btn-danger">Reject</button>` : ''}
+                    <button type="button" id="alertAuthoritiesBtn" class="btn btn-warning">
+                        <i class="fas fa-exclamation-triangle"></i> Alert Authorities
+                    </button>
                   </div>
                 </div>
               </div>
@@ -621,6 +734,15 @@ document.addEventListener('DOMContentLoaded', async function () {
         modalEl.addEventListener('hidden.bs.modal', () => {
             try { modalEl.remove(); } catch (e) { /* ignore */ }
         });
+
+        // Add event listeners
+        const alertAuthoritiesBtn = document.getElementById('alertAuthoritiesBtn');
+        if (alertAuthoritiesBtn) {
+            alertAuthoritiesBtn.addEventListener('click', () => {
+                bsModal.hide();
+                showCreateAlertModal(rid);
+            });
+        }
 
         if (isPending) {
             const verifyBtn = document.getElementById('verifyBtn');
@@ -681,12 +803,52 @@ document.addEventListener('DOMContentLoaded', async function () {
         }
     };
 
+    /* ---------- tab switching ---------- */
+    function setupTabSwitching() {
+        const tabBtns = document.querySelectorAll('.tab-btn');
+        const tabContents = document.querySelectorAll('.tab-content');
+
+        tabBtns.forEach(btn => {
+            btn.addEventListener('click', async () => {
+                // Remove active class from all buttons and content
+                tabBtns.forEach(b => b.classList.remove('active'));
+                tabContents.forEach(c => c.classList.remove('active'));
+
+                // Add active class to clicked button
+                btn.classList.add('active');
+
+                // Show corresponding content
+                const tabName = btn.getAttribute('data-tab');
+                const tabContent = document.getElementById(tabName + 'Tab');
+                if (tabContent) {
+                    tabContent.classList.add('active');
+                }
+
+                // Load tab-specific data
+                if (tabName === 'alerts') {
+                    await fetchAuthorityAlerts();
+                } else if (tabName === 'trends') {
+                    await fetchTrendingHazards();
+                    await fetchSocialMediaActivity();
+                } else if (tabName === 'reports') {
+                    await fetchRecentReports();
+                }
+            });
+        });
+    }
+
     /* ---------- auto refresh / filters / init ---------- */
     function startAutoRefresh() {
         stopAutoRefresh();
         refreshInterval = setInterval(async () => {
             try {
                 await Promise.all([fetchHazardData(), fetchDashboardStats(), fetchTrendingHazards(), fetchRecentReports()]);
+                
+                // Refresh alerts if alerts tab is active
+                const activeTab = document.querySelector('.tab-btn.active');
+                if (activeTab && activeTab.getAttribute('data-tab') === 'alerts') {
+                    await fetchAuthorityAlerts();
+                }
             } catch (err) {
                 console.error('Auto refresh error', err);
             }
@@ -735,30 +897,92 @@ document.addEventListener('DOMContentLoaded', async function () {
         showNotification('Filters reset', 'success');
     }
 
+    /* ---------- event listeners setup ---------- */
+    function setupEventListeners() {
+        // Authority Alert Form
+        const authorityAlertForm = document.getElementById('authorityAlertForm');
+        if (authorityAlertForm) {
+            authorityAlertForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const submitBtn = e.target.querySelector('button[type="submit"]');
+                const originalBtnText = submitBtn.innerHTML;
+
+                try {
+                    submitBtn.disabled = true;
+                    submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Sending Alert...';
+
+                    const formData = new FormData(authorityAlertForm);
+                    const alertData = {
+                        report_id: formData.get('report_id'),
+                        authority_type: formData.get('authority_type'),
+                        message: formData.get('message'),
+                        status: formData.get('status')
+                    };
+
+                    await submitAuthorityAlert(alertData);
+                    
+                    // Close modal and reset form
+                    const modal = bootstrap.Modal.getInstance(document.getElementById('authorityAlertModal'));
+                    if (modal) modal.hide();
+                    authorityAlertForm.reset();
+                    
+                } catch (err) {
+                    console.error('Authority alert submission error:', err);
+                    showNotification(`Failed to send alert: ${err.message}`, 'danger');
+                } finally {
+                    submitBtn.disabled = false;
+                    submitBtn.innerHTML = originalBtnText;
+                }
+            });
+        }
+
+        // Create Alert Button
+        const createAlertBtn = document.getElementById('createAlertBtn');
+        if (createAlertBtn) {
+            createAlertBtn.addEventListener('click', () => showCreateAlertModal());
+        }
+
+        // Refresh Button
+        const refreshBtn = document.getElementById('refreshBtn');
+        if (refreshBtn) {
+            refreshBtn.addEventListener('click', async () => {
+                refreshBtn.disabled = true;
+                refreshBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Refreshing...';
+                try {
+                    await Promise.all([
+                        fetchHazardData(), 
+                        fetchDashboardStats(), 
+                        fetchTrendingHazards(), 
+                        fetchRecentReports(), 
+                        fetchSocialMediaActivity()
+                    ]);
+                    
+                    // Refresh alerts if alerts tab is active
+                    const activeTab = document.querySelector('.tab-btn.active');
+                    if (activeTab && activeTab.getAttribute('data-tab') === 'alerts') {
+                        await fetchAuthorityAlerts();
+                    }
+                    
+                    showNotification('Dashboard refreshed', 'success');
+                } catch (err) {
+                    showNotification('Refresh failed', 'danger');
+                } finally {
+                    refreshBtn.disabled = false;
+                    refreshBtn.innerHTML = '<i class="fas fa-sync-alt"></i> Refresh';
+                }
+            });
+        }
+    }
+
     async function initializeDashboard() {
         try {
             initializeMap();
             setupFilters();
+            setupTabSwitching();
+            setupEventListeners();
             window.refreshHazards = fetchHazardData;
 
             await Promise.all([fetchHazardData(), fetchDashboardStats(), fetchTrendingHazards(), fetchRecentReports(), fetchSocialMediaActivity()]);
-
-            const refreshBtn = document.getElementById('refreshBtn');
-            if (refreshBtn) {
-                refreshBtn.addEventListener('click', async () => {
-                    refreshBtn.disabled = true;
-                    refreshBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Refreshing...';
-                    try {
-                        await Promise.all([fetchHazardData(), fetchDashboardStats(), fetchTrendingHazards(), fetchRecentReports(), fetchSocialMediaActivity()]);
-                        showNotification('Dashboard refreshed', 'success');
-                    } catch (err) {
-                        showNotification('Refresh failed', 'danger');
-                    } finally {
-                        refreshBtn.disabled = false;
-                        refreshBtn.innerHTML = '<i class="fas fa-sync-alt"></i> Refresh';
-                    }
-                });
-            }
 
             startAutoRefresh();
             window.addEventListener('beforeunload', stopAutoRefresh);
@@ -769,6 +993,9 @@ document.addEventListener('DOMContentLoaded', async function () {
         }
     }
 
+    // Expose functions globally for inline onclick handlers
+    window.showCreateAlertModal = showCreateAlertModal;
+    
     // start
     initializeDashboard();
 });

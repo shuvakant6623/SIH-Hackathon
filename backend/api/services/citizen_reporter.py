@@ -11,7 +11,8 @@ import json
 import logging
 
 # Adjust this import to match your project layout
-from backend.api.models.schemas import HazardReport, ReportSubmission, IST, SessionLocal
+from backend.api.models.database import HazardReport, AuthorityAlerts, IST, SessionLocal
+from backend.api.models.schemas import ReportSubmission, AuthorityAlertCreate, AuthorityAlertResponse
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -73,7 +74,7 @@ class HazardReportManager:
         async with aiofiles.open(file_path, 'wb') as f:
             await f.write(content)
 
-        # Return relative URL path — make sure to mount StaticFiles("/media/hazard")
+        # Return relative URL path – make sure to mount StaticFiles("/media/hazard")
         return f"/media/hazard/{unique_filename}"
 
     def validate_report_location(self, lat: float, lon: float) -> bool:
@@ -147,7 +148,6 @@ async def submit_hazard_report(
             media_url = await report_manager.save_media_bytes(content, file.filename)
             media_urls.append(media_url)
 
-    # Build ORM model instance (adjust keys/fields if your model differs)
     db_report = HazardReport(
         id=str(uuid.uuid4()),
         user_id=report.user_id,
@@ -282,6 +282,7 @@ async def verify_report(
         "verified_by": verifier_id,
         "verification_timestamp": report.verification_timestamp.isoformat()
     }
+
 @router.get("/api/reports/active")
 async def get_active_reports(hours: int = 48, db: Session = Depends(get_db)):
     cutoff = datetime.now(IST) - timedelta(hours=hours)
@@ -297,11 +298,42 @@ async def get_active_reports(hours: int = 48, db: Session = Depends(get_db)):
                 "severity": r.severity,
                 "description": r.description,
                 "location_name": r.location_name,
-                "timestamp": r.timestamp.isoformat()
+                "timestamp": r.timestamp.isoformat(),
+                "verification_status": r.verification_status,
+                "priority_score": r.priority_score
             }
             for r in reports
         ]
     }
+
+
+@router.get("/api/reports/{report_id}")
+async def get_report_details(report_id: str, db: Session = Depends(get_db)):
+    """Get detailed information about a specific report"""
+    report = db.query(HazardReport).filter(HazardReport.id == report_id).first()
+    if not report:
+        raise HTTPException(status_code=404, detail="Report not found")
+    
+    return {
+        "id": report.id,
+        "user_id": report.user_id,
+        "latitude": report.latitude,
+        "longitude": report.longitude,
+        "location_name": report.location_name,
+        "hazard_type": report.hazard_type,
+        "severity": report.severity,
+        "description": report.description,
+        "media_urls": report.media_urls or [],
+        "verification_status": report.verification_status,
+        "priority_score": report.priority_score,
+        "nearby_reports": report.nearby_reports or [],
+        "weather_conditions": report.weather_conditions,
+        "timestamp": report.timestamp.isoformat() if report.timestamp else None,
+        "created_at": report.timestamp.isoformat() if report.timestamp else None
+    }
+
+
+
 
 @router.get("/api/dashboard/stats")
 async def get_dashboard_stats(db: Session = Depends(get_db)):
@@ -319,10 +351,11 @@ async def get_dashboard_stats(db: Session = Depends(get_db)):
         "resolved_reports": resolved_reports,
     }
 
+
 @router.get("/api/dashboard/reports")
 async def get_dashboard_reports(db: Session = Depends(get_db)):
     recent = db.query(HazardReport).order_by(HazardReport.timestamp.desc()).limit(50).all()
-    return {"reports":[
+    return {"reports": [
         {
             "id": r.id,
             "hazard_type": r.hazard_type,
@@ -331,6 +364,178 @@ async def get_dashboard_reports(db: Session = Depends(get_db)):
             "longitude": r.longitude,
             "severity": r.severity,
             "timestamp": r.timestamp.isoformat(),
-            "verification_status": r.verification_status
+            "verification_status": r.verification_status,
+            "created_at": r.timestamp.isoformat()
         } for r in recent
     ]}
+
+
+@router.get("/api/dashboard/trends")
+async def get_dashboard_trends(db: Session = Depends(get_db)):
+    """Mock trending hazards data - replace with real social media analysis"""
+    return {
+        "trending": [
+            {
+                "hazard_type": "coastal_flooding",
+                "trend_score": 0.85,
+                "post_count": 127,
+                "affected_regions": ["Chennai", "Puducherry"]
+            },
+            {
+                "hazard_type": "cyclone",
+                "trend_score": 0.72,
+                "post_count": 89,
+                "affected_regions": ["Odisha", "Andhra Pradesh"]
+            }
+        ]
+    }
+
+
+# FIXED: Authority Alerts endpoints with proper /api prefix
+@router.post("/api/alerts", response_model=AuthorityAlertResponse)
+async def create_authority_alert(alert: AuthorityAlertCreate, db: Session = Depends(get_db)):
+    """Create a new authority alert for a hazard report"""
+    # Verify the report exists
+    report = db.query(HazardReport).filter(HazardReport.id == alert.report_id).first()
+    if not report:
+        raise HTTPException(status_code=404, detail="Report not found")
+    
+    new_alert = AuthorityAlerts(
+        id=str(uuid.uuid4()),
+        report_id=alert.report_id,
+        authority_type=alert.authority_type,
+        message=alert.message,
+        status=alert.status,
+        timestamp=datetime.now(IST)
+    )
+    try:
+        db.add(new_alert)
+        db.commit()
+        db.refresh(new_alert)
+        
+        logger.info(f"Authority alert created: {new_alert.id} for report {alert.report_id}")
+        
+        return AuthorityAlertResponse(
+            id=new_alert.id,
+            report_id=new_alert.report_id,
+            authority_type=new_alert.authority_type,
+            message=new_alert.message,
+            status=new_alert.status,
+            timestamp=new_alert.timestamp
+        )
+    except Exception as e:
+        db.rollback()
+        logger.exception("DB error while saving authority alert")
+        raise HTTPException(status_code=500, detail="Internal server error saving authority alert")
+
+
+@router.get("/api/alerts", response_model=List[AuthorityAlertResponse])
+async def get_authority_alerts(
+    limit: int = 50,
+    status_filter: Optional[str] = None,
+    db: Session = Depends(get_db)
+):
+    """Get all authority alerts, optionally filtered by status"""
+    query = db.query(AuthorityAlerts)
+    
+    if status_filter:
+        query = query.filter(AuthorityAlerts.status == status_filter)
+    
+    alerts = query.order_by(AuthorityAlerts.timestamp.desc()).limit(limit).all()
+    
+    return [
+        AuthorityAlertResponse(
+            id=alert.id,
+            report_id=alert.report_id,
+            authority_type=alert.authority_type,
+            message=alert.message,
+            status=alert.status,
+            timestamp=alert.timestamp
+        )
+        for alert in alerts
+    ]
+
+
+@router.get("/api/alerts/{alert_id}", response_model=AuthorityAlertResponse)
+async def get_authority_alert(alert_id: str, db: Session = Depends(get_db)):
+    """Get a specific authority alert by ID"""
+    alert = db.query(AuthorityAlerts).filter(AuthorityAlerts.id == alert_id).first()
+    if not alert:
+        raise HTTPException(status_code=404, detail="Authority alert not found")
+    
+    return AuthorityAlertResponse(
+        id=alert.id,
+        report_id=alert.report_id,
+        authority_type=alert.authority_type,
+        message=alert.message,
+        status=alert.status,
+        timestamp=alert.timestamp
+    )
+
+
+@router.put("/alerts/{alert_id}/status")
+async def update_alert_status(
+    alert_id: str,
+    new_status: str,
+    db: Session = Depends(get_db)
+):
+    """Update the status of an authority alert"""
+    valid_statuses = ['urgent', 'high_priority', 'standard', 'informational', 'resolved', 'cancelled']
+    if new_status not in valid_statuses:
+        raise HTTPException(
+            status_code=400, 
+            detail=f"Invalid status. Must be one of: {', '.join(valid_statuses)}"
+        )
+    
+    alert = db.query(AuthorityAlerts).filter(AuthorityAlerts.id == alert_id).first()
+    if not alert:
+        raise HTTPException(status_code=404, detail="Authority alert not found")
+    
+    old_status = alert.status
+    alert.status = new_status
+    
+    try:
+        db.commit()
+        db.refresh(alert)
+        logger.info(f"Alert {alert_id} status updated from {old_status} to {new_status}")
+        
+        return {
+            "status": "success",
+            "alert_id": alert_id,
+            "old_status": old_status,
+            "new_status": new_status,
+            "updated_at": datetime.now(IST).isoformat()
+        }
+    except Exception as e:
+        db.rollback()
+        logger.exception("DB error while updating alert status")
+        raise HTTPException(status_code=500, detail="Internal server error updating alert status")
+
+
+# Add missing social media analysis endpoint
+@router.post("/analyze/social-media")
+async def analyze_social_media(posts_data: dict):
+    """Mock social media analysis - replace with real implementation"""
+    posts = posts_data.get('posts', [])
+    
+    # Mock analysis response
+    return {
+        "total_posts_analyzed": len(posts),
+        "alerts_generated": 2,
+        "high_priority_alerts": [
+            {
+                "alert": {
+                    "hazard_type": "tsunami",
+                    "confidence": 0.85,
+                    "location_mentions": ["Chennai", "Marina Beach"]
+                }
+            },
+            {
+                "alert": {
+                    "hazard_type": "cyclone",
+                    "confidence": 0.92,
+                    "location_mentions": ["Puri", "Bhubaneswar"]
+                }
+            }
+        ]
+    }

@@ -47,30 +47,40 @@
                     <h3>Filters</h3>
                     <form id="filterForm">
                         <label for="locationFilter">Location:</label>
-                        <input type="text" id="locationFilter" placeholder="e.g., Chennai, Kerala">
+                        <input type="text" id="locationFilter" name="locationFilter" placeholder="e.g., Chennai, Kerala">
 
                         <label for="hazardTypeFilter">Hazard Type:</label>
-                        <select id="hazardTypeFilter">
+                        <select id="hazardTypeFilter" name="hazardTypeFilter">
                             <option value="">All Hazards</option>
                             <option value="tsunami">Tsunami</option>
                             <option value="cyclone">Cyclone</option>
-                            <option value="coastal_flooding">Costal Flood</option>
+                            <option value="coastal_flooding">Coastal Flood</option>
                             <option value="storm_surge">Storm Surge</option>
                              <option value="high_waves">High Waves</option>
                              <option value="coastal_erosion">Coastal Erosion</option>
                              <option value="rip_current">Rip Current</option>
                         </select>
 
-                        <label for="dateFilter">Date Range:</label>
-                         <input type="date" id="startDateFilter"> to
-                         <input type="date" id="endDateFilter">
+                        <label for="startDate">Date Range:</label>
+                         <input type="date" id="startDate" name="startDate"> to
+                         <input type="date" id="endDate" name="endDate">
 
-                        <label for="sourceFilter">Source:</label>
-                        <select id="sourceFilter">
-                            <option value="">All Sources</option>
-                            <option value="crowdsourced">Crowdsourced Reports</option>
-                            <option value="social_media">Social Media</option>
-                            <option value="official">Official Alerts</option>
+                        <label for="minSeverity">Min Severity:</label>
+                        <select id="minSeverity" name="minSeverity">
+                            <option value="">All Severities</option>
+                            <option value="1">1 - Low</option>
+                            <option value="2">2 - Low-Medium</option>
+                            <option value="3">3 - Medium</option>
+                            <option value="4">4 - High</option>
+                            <option value="5">5 - Critical</option>
+                        </select>
+
+                        <label for="verificationStatus">Status:</label>
+                        <select id="verificationStatus" name="verificationStatus">
+                            <option value="">All Status</option>
+                            <option value="pending">Pending</option>
+                            <option value="verified">Verified</option>
+                            <option value="rejected">Rejected</option>
                         </select>
 
                         <button type="submit" class="btn btn-primary">Apply Filters</button>
@@ -83,16 +93,24 @@
                             <li>Total Reports: <span id="totalReports">0</span></li>
                             <li>Active Hazards: <span id="activeHazards">0</span></li>
                             <li>Hotspots: <span id="hotspotCount">0</span></li>
+                            <li>High Priority: <span id="highPriorityAlerts">0</span></li>
                         </ul>
+                        <p class="text-muted small">Last Updated: <span id="lastUpdated">-</span></p>
                     </div>
                 </aside>
 
                 <!-- Main Content Area -->
                 <div class="main-content">
-                    <div class="tabs">
-                        <button class="tab-btn active" data-tab="map">Map View</button>
-                        <button class="tab-btn" data-tab="trends">Social Trends</button>
-                        <button class="tab-btn" data-tab="reports">Recent Reports</button>
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <div class="tabs">
+                            <button class="tab-btn active" data-tab="map">Map View</button>
+                            <button class="tab-btn" data-tab="trends">Social Trends</button>
+                            <button class="tab-btn" data-tab="reports">Recent Reports</button>
+                            <button class="tab-btn" data-tab="alerts">Authority Alerts</button>
+                        </div>
+                        <button id="refreshBtn" class="btn btn-outline-primary">
+                            <i class="fas fa-sync-alt"></i> Refresh
+                        </button>
                     </div>
 
                     <div class="tab-content active" id="mapTab">
@@ -115,7 +133,7 @@
 
                     <div class="tab-content" id="reportsTab">
                         <h3>Recent Hazard Reports</h3>
-                        <table id="reportsTable">
+                        <table id="reportsTable" class="table table-striped">
                             <thead>
                                 <tr>
                                     <th>ID</th>
@@ -128,10 +146,22 @@
                             </thead>
                             <tbody>
                                  <tr>
-                                    <td colspan="6">Loading reports...</td>
+                                    <td colspan="6" class="text-center">Loading reports...</td>
                                 </tr>
                             </tbody>
                         </table>
+                    </div>
+
+                    <div class="tab-content" id="alertsTab">
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <h3>Authority Alerts</h3>
+                            <button id="createAlertBtn" class="btn btn-danger">
+                                <i class="fas fa-exclamation-triangle"></i> Create New Alert
+                            </button>
+                        </div>
+                        <div id="alertsList">
+                            <p>Loading authority alerts...</p>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -143,7 +173,63 @@
             <p>&copy; 2024 INCOIS. All rights reserved.</p>
         </div>
     </footer>
-    <div id="reportDetailsModal" class="modal"></div>
+
+    <!-- Alert Authority Modal -->
+    <div class="modal fade" id="authorityAlertModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Alert Authorities</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <form id="authorityAlertForm">
+                    <div class="modal-body">
+                        <div class="mb-3">
+                            <label for="alertReportId" class="form-label">Report ID *</label>
+                            <input type="text" class="form-control" id="alertReportId" name="report_id" required>
+                            <div class="form-text">Enter the ID of the hazard report to alert authorities about</div>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="authorityType" class="form-label">Authority Type *</label>
+                            <select class="form-select" id="authorityType" name="authority_type" required>
+                                <option value="">Select Authority</option>
+                                <option value="coast_guard">Coast Guard</option>
+                                <option value="disaster_management">Disaster Management</option>
+                                <option value="navy">Indian Navy</option>
+                                <option value="police">State Police</option>
+                                <option value="fire_dept">Fire Department</option>
+                                <option value="medical_emergency">Medical Emergency</option>
+                                <option value="port_authority">Port Authority</option>
+                            </select>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="alertMessage" class="form-label">Alert Message *</label>
+                            <textarea class="form-control" id="alertMessage" name="message" rows="4" required 
+                                placeholder="Describe the situation and required response..."></textarea>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="alertStatus" class="form-label">Alert Status *</label>
+                            <select class="form-select" id="alertStatus" name="status" required>
+                                <option value="urgent">Urgent - Immediate Response Required</option>
+                                <option value="high_priority">High Priority - Response within 1 hour</option>
+                                <option value="standard">Standard - Response within 4 hours</option>
+                                <option value="informational">Informational - For Awareness</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn btn-danger">
+                            <i class="fas fa-paper-plane"></i> Send Alert
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
 
     <!-- Include Map Library JS (e.g., Leaflet) -->
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
